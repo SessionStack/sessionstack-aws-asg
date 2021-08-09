@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -e
+
+instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+region=$(
+  curl -s http://169.254.169.254/latest/dynamic/instance-identity/document |
+  grep region | sed -r 's/.* : "([0-9a-z-]+)".*$/\1/g')
+
+aws --region=$region ec2 attach-volume \
+  --volume-id ${volume_id} \
+  --instance-id $instance_id \
+  --device /dev/sdf && sleep 10
+
+mkdir -p /mnt/ext_files && mount /dev/xvdf1 /mnt/ext_files
+
+cd /etc/sessionstack
+
+docker-compose up -d
+
+aws --region $region autoscaling complete-lifecycle-action \
+  --lifecycle-hook-name attach-storage-volume-and-launch \
+  --lifecycle-action-result CONTINUE \
+  --instance-id $instance_id \
+  --auto-scaling-group-name '${autoscalling_group_name}'

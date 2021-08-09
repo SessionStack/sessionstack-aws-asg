@@ -1,0 +1,47 @@
+---
+defaults:
+  concurrency: 1
+  app: server.app.tasks.init_tasks
+  loglevel: INFO
+  queues:
+    # generic
+    - celery
+    # email_notification_tasks
+    - deliver_notifications
+    - schedule_weekly_reports
+    - deliver_weekly_report
+    # registration_tasks
+    - add_user_to_sendgrid
+    - send_notification_email
+    - create_pipedrive_deal_for_user
+    - add_user_to_pipedrive_organization
+    # session_analytics_tasks
+    - process_sessions_for_period
+    - process_monthly_recorded_sessions
+    - track_recorded_session
+    # external_resources
+    - create_session_resource_mappings
+    - remove_resource_mappings
+    # tasks
+    #  - process_inline_stylesheet_resources
+    #  - process_external_resource
+    - external_resources
+    # payment_tasks
+    - send_subscription_change_email
+    # user_identity_tasks
+    - set_session_identity
+    # event_tasks
+    - process_event
+    - track_event
+    - set_user_property
+    # session_tasks
+    - process_session_created
+    - process_session_upserted
+    - process_session_location_upserted
+    - process_session_pinged
+    - process_session_events_created
+    - process_session_logs_created
+    - delete_expired_sessions
+    - update_sessions_activities_cache
+    - reset_organizations_recorded_sessions_stats
+    - purge_expired_events

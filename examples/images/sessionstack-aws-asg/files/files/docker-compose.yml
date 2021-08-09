@@ -1,0 +1,109 @@
+---
+version: '3'
+services:
+  recorder:
+    image: ${RECORDER_IMAGE}
+    restart: always
+    env_file: [.env]
+    logging: &logging
+      driver: "json-file"
+      options:
+        max-size: "2048m"
+
+  broker:
+    image: ${BROKER_IMAGE}
+    restart: always
+    env_file: [.env]
+    command: /bin/sh -c 'redis-server --daemonize yes && ./node_modules/.bin/pm2-runtime start -i 2 server/app.js'
+    logging: *logging
+
+  lib:
+    image: ${LIB_IMAGE}
+    command: >
+      /bin/sh -c "
+      npm run build-production -- \
+          --platform-address=${PLATFORM_ADDRESS} \
+          --broker-address=${BROKER_ADDRESS} \
+          --recorder-address=${RECORDER_ADDRESS} \
+          --library-address=${LIBRARY_ADDRESS} && \
+          sleep 100000"
+    volumes:
+      - recorder_lib:/usr/src/app/dist
+    logging: *logging
+
+  client:
+    image: ${CLIENT_IMAGE}
+    command: >
+     /bin/sh -c "
+       grunt build-production \
+         --server-address=${PLATFORM_ADDRESS}/ \
+         --front-end-address=${FRONTEND_ADDRESS} \
+         --broker-address=${BROKER_ADDRESS}/ \
+         --static-files-address=${FRONTEND_ADDRESS} \
+         --on-premises=true && \
+         sleep 100000"
+    volumes:
+      - platform_player_template:/usr/src/app/apps/playerTemplate
+      - platform_public:/usr/src/app/dist
+    logging: *logging
+
+  api:
+    image: ${API_IMAGE}
+    restart: always
+    sysctls:
+      - net.core.somaxconn=256
+    env_file: [.env]
+    volumes:
+      - platform_player_template:/usr/src/app/client/playerTemplate/
+      - recorder_lib:/usr/src/recorder.client/dist
+      - api_socket:/var/run/sessionstack/
+      - ./config:/usr/src/app/config
+    logging: *logging
+
+  celery.main:
+    image: ${API_IMAGE}
+    restart: always
+    env_file: [.env]
+    volumes:
+      - resources:/usr/src/resources
+      - ./config:/usr/src/app/config
+    command: python ./workers.py worker ./config/workers.yml
+    logging: *logging
+
+  celery.beat:
+    image: ${API_IMAGE}
+    restart: always
+    env_file: [.env]
+    volumes:
+      - resources:/usr/src/resources
+      - ./config:/usr/src/app/config
+    command: celery -A server.app.tasks.init_tasks beat -l debug --max-interval=10
+    logging: *logging
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf
+      - recorder_lib:/usr/src/recorder/lib
+      - platform_public:/usr/src/public
+      - api_socket:/var/run/sessionstack/
+      - resources:/usr/src/resources
+    ports:
+      - "2733:2733"
+    depends_on:
+      - recorder
+      - broker
+      - api
+    logging: *logging
+
+volumes:
+  recorder_lib: {}
+  platform_player_template: {}
+  platform_public: {}
+  api_socket: {}
+  resources:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/ext_files
